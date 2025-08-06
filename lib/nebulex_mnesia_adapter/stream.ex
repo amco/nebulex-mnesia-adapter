@@ -26,6 +26,7 @@ defmodule NebulexMnesiaAdapter.Stream do
           [] ->
             {:atomic, next_key} = Table.first()
             next(next_key, [next_key], opts)
+
           keys ->
             {:atomic, next_key} =
               List.last(keys)

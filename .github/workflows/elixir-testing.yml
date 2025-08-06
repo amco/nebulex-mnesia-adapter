@@ -17,6 +17,7 @@ jobs:
     # Sets the ENV `MIX_ENV` to `test` for running tests
     env:
       MIX_ENV: test
+      NEBULEX_PATH: nebulex
 
     runs-on: ubuntu-22.04
     name: Test on OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}}
@@ -48,6 +49,9 @@ jobs:
               ${{ steps.setup-beam.outputs.otp-version }}-\
               elixir-${{ steps.setup-beam.outputs.elixir-version }}-\
               mix.lock-${{ hashFiles('**/mix.lock') }}"
+
+    - name: Configure Nebulex
+      run: mix nbx.setup
 
     - name: Install Elixir dependencies
       run: mix deps.get

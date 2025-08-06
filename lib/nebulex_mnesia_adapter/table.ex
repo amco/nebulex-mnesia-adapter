@@ -29,6 +29,23 @@ defmodule NebulexMnesiaAdapter.Table do
     Mnesia.create_table(MnesiaCache, attributes: @attrs)
   end
 
+  def bulk_read(keys) when is_list(keys) do
+    fn -> for key <- keys, do: Mnesia.read(cache_table(), key) end
+    |> Mnesia.transaction()
+    |> case do
+      {:atomic, []} ->
+        []
+
+      {:atomic, results} ->
+        results
+        |> Enum.filter(&(&1 != []))
+        |> Enum.map(fn [record] -> record end)
+
+      _other ->
+        []
+    end
+  end
+
   def read(key) do
     fn -> Mnesia.read(cache_table(), key) end
     |> Mnesia.transaction()
@@ -41,6 +58,18 @@ defmodule NebulexMnesiaAdapter.Table do
 
       error ->
         {:error, error}
+    end
+  end
+
+  def bulk_write(values) when is_list(values) do
+    fn ->
+      Enum.map(values, &Tuple.insert_at(&1, 0, cache_table()))
+      |> Enum.map(&Mnesia.write/1)
+    end
+    |> Mnesia.transaction()
+    |> case do
+      {:atomic, response} -> response
+      error -> {:error, error}
     end
   end
 
