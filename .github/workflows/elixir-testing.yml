@@ -17,6 +17,7 @@ jobs:
     # Sets the ENV `MIX_ENV` to `test` for running tests
     env:
       MIX_ENV: test
+      NEBULEX_PATH: nebulex
 
     runs-on: ubuntu-22.04
     name: Test on OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}}
