@@ -154,7 +154,7 @@ defmodule NebulexMnesiaAdapter do
   defp remaining_time(_touched, :infinity), do: :infinity
 
   defp remaining_time(touched, ttl) do
-    with time_left <- (touched + ttl) - now(),
+    with time_left <- touched + ttl - now(),
          true <- time_left > 0 do
       time_left
     else
@@ -218,6 +218,6 @@ defmodule NebulexMnesiaAdapter do
   end
 
   defp expired?(touched, ttl) do
-    now() > (touched + ttl)
+    now() > touched + ttl
   end
 end

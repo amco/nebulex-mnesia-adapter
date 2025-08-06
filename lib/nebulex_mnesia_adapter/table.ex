@@ -38,7 +38,7 @@ defmodule NebulexMnesiaAdapter.Table do
 
       {:atomic, results} ->
         results
-        |> Enum.filter(& &1 != [])
+        |> Enum.filter(&(&1 != []))
         |> Enum.map(fn [record] -> record end)
 
       _other ->
