@@ -55,6 +55,23 @@ defmodule NebulexMnesiaAdapter.Table do
     end
   end
 
+  def bulk_read(keys) when is_list(keys) do
+    fn -> for key <- keys, do: Mnesia.read(cache_table(), key) end
+    |> Mnesia.transaction()
+    |> case do
+      {:atomic, []} ->
+        []
+
+      {:atomic, results} ->
+        results
+        |> Enum.filter(&(&1 != []))
+        |> Enum.map(fn [record] -> record end)
+
+      _other ->
+        []
+    end
+  end
+
   def read(key) do
     fn -> Mnesia.read(cache_table(), key) end
     |> Mnesia.transaction()
