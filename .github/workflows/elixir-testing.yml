@@ -58,5 +58,8 @@ jobs:
     - name: Check Formatting
       run: mix format --check-formatted "lib/**/*.{ex,exs}" "test/**/*.{ex,exs}"
 
+    - name: Configure Nebulex
+      run: mix nbx.setup
+
     - name: Run tests
       run: mix test
