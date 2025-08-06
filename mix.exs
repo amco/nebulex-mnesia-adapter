@@ -28,6 +28,7 @@ defmodule NebulexMnesiaAdapter.MixProject do
   defp deps do
     [
       nebulex_dep(),
+      {:stream_data, "~> 1.1", only: [:dev, :test]},
       {:telemetry, "~> 0.4 or ~> 1.0", optional: true}
     ]
   end
