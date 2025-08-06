@@ -19,7 +19,8 @@ defmodule NebulexMnesiaAdapterTest do
   end
 
   defp safe_stop(pid) do
-    Process.exit(pid, :kill)
+    :ok = Process.sleep(10)
+    if Process.alive?(pid), do: Cache.stop(pid)
   catch
     :exit, _ -> :ok
   end
