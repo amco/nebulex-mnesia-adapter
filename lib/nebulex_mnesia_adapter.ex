@@ -11,7 +11,6 @@ defmodule NebulexMnesiaAdapter do
   @impl Nebulex.Adapter
   def init(_opts) do
     child_spec = Supervisor.child_spec({Agent, fn -> :ok end}, id: {Agent, 1})
-    Table.setup()
     {:ok, child_spec, %{}}
   end
 

@@ -17,16 +17,25 @@ defmodule NebulexMnesiaAdapter.Table do
   - Wraps all operations in `:mnesia.transaction/1` for atomicity and consistency
   """
 
+  use GenServer
+
   alias :mnesia, as: Mnesia
 
   @attrs ~w[key value touched ttl]a
   @default_table MnesiaCache
 
-  def setup do
-    Mnesia.create_schema(Node.list())
-    Mnesia.start()
+  def start_link(opts \\ []) do
+    GenServer.start_link(__MODULE__, opts)
+  end
 
-    Mnesia.create_table(MnesiaCache, attributes: @attrs)
+  def init(opts) do
+    nodes = opts[:nodes] || default_nodes()
+
+    Mnesia.create_schema(nodes)
+    Mnesia.start()
+    Mnesia.create_table(MnesiaCache, attributes: @attrs, disc_copies: nodes)
+
+    {:ok, opts}
   end
 
   def bulk_read(keys) when is_list(keys) do
@@ -134,5 +143,9 @@ defmodule NebulexMnesiaAdapter.Table do
 
   defp cache_table do
     @default_table
+  end
+
+  defp default_nodes do
+    [Node.self()] ++ Node.list()
   end
 end

@@ -19,3 +19,5 @@ for file <- File.ls!("test/shared"), not File.dir?("test/shared/" <> file) do
 end
 
 ExUnit.start()
+
+NebulexMnesiaAdapter.Table.start_link()
