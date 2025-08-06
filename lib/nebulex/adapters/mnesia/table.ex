@@ -1,4 +1,4 @@
-defmodule NebulexMnesiaAdapter.Table do
+defmodule Nebulex.Adapters.Mnesia.Table do
   @moduledoc """
   Provides a lightweight abstraction over an Mnesia table used as a simple key-value store.
 

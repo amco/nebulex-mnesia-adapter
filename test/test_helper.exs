@@ -20,4 +20,4 @@ end
 
 ExUnit.start()
 
-NebulexMnesiaAdapter.Table.start_link()
+Nebulex.Adapters.Mnesia.Table.start_link()

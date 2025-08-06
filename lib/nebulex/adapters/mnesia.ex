@@ -1,4 +1,4 @@
-defmodule NebulexMnesiaAdapter do
+defmodule Nebulex.Adapters.Mnesia do
   alias __MODULE__.Table
 
   @behaviour Nebulex.Adapter
@@ -197,7 +197,7 @@ defmodule NebulexMnesiaAdapter do
 
   @impl Nebulex.Adapter.Queryable
   def stream(_adapter_meta, nil, opts) do
-    NebulexMnesiaAdapter.Stream.call(opts)
+    Nebulex.Adapters.Mnesia.Stream.call(opts)
   end
 
   @doc """

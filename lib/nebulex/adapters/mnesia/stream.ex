@@ -1,4 +1,4 @@
-defmodule NebulexMnesiaAdapter.Stream do
+defmodule Nebulex.Adapters.Mnesia.Stream do
   @moduledoc """
   Provides a stream abstraction over a Mnesia-backed Nebulex cache table.
 
@@ -16,7 +16,7 @@ defmodule NebulexMnesiaAdapter.Stream do
       * Any other value (or no option) – returns keys only.
   """
 
-  alias NebulexMnesiaAdapter.Table
+  alias Nebulex.Adapters.Mnesia.Table
 
   def call(opts) do
     Stream.resource(
