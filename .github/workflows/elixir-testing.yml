@@ -50,6 +50,9 @@ jobs:
               elixir-${{ steps.setup-beam.outputs.elixir-version }}-\
               mix.lock-${{ hashFiles('**/mix.lock') }}"
 
+    - name: Configure Nebulex
+      run: mix nbx.setup
+
     - name: Install Elixir dependencies
       run: mix deps.get
 
@@ -58,9 +61,6 @@ jobs:
 
     - name: Check Formatting
       run: mix format --check-formatted "lib/**/*.{ex,exs}" "test/**/*.{ex,exs}"
-
-    - name: Configure Nebulex
-      run: mix nbx.setup
 
     - name: Run tests
       run: mix test
