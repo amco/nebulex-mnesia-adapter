@@ -181,7 +181,7 @@ defmodule Nebulex.Adapters.Mnesia do
   @impl Nebulex.Adapter.Queryable
   def execute(_adapter_meta, :all, nil, _opts) do
     Table.all_records()
-    |> Enum.map(fn {_table, _key, value, _touched, _ttl} -> value end)
+    |> Enum.map(fn {_table, key, _value, _touched, _ttl} -> key end)
   end
 
   @impl Nebulex.Adapter.Queryable
