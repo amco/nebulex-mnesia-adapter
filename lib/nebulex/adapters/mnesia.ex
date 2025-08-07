@@ -1,4 +1,4 @@
-defmodule NebulexMnesiaAdapter do
+defmodule Nebulex.Adapters.Mnesia do
   alias __MODULE__.Table
 
   @behaviour Nebulex.Adapter
@@ -11,7 +11,6 @@ defmodule NebulexMnesiaAdapter do
   @impl Nebulex.Adapter
   def init(_opts) do
     child_spec = Supervisor.child_spec({Agent, fn -> :ok end}, id: {Agent, 1})
-    Table.setup()
     {:ok, child_spec, %{}}
   end
 
@@ -198,7 +197,7 @@ defmodule NebulexMnesiaAdapter do
 
   @impl Nebulex.Adapter.Queryable
   def stream(_adapter_meta, nil, opts) do
-    NebulexMnesiaAdapter.Stream.call(opts)
+    Nebulex.Adapters.Mnesia.Stream.call(opts)
   end
 
   @doc """
