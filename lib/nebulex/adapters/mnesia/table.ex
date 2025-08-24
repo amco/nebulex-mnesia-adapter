@@ -115,7 +115,7 @@ defmodule Nebulex.Adapters.Mnesia.Table do
       {:atomic, records} ->
         records
 
-      err ->
+      _error ->
         {:error, :unexpected}
     end
   end
