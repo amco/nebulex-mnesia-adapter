@@ -22,7 +22,7 @@ defmodule Nebulex.Adapters.Mnesia.Table do
     case Mnesia.create_table(cache_table(), attributes: @attrs, disc_copies: nodes) do
       {:atomic, :ok} -> :ok
       {:aborted, {:already_exists, _}} -> :ok
-      other -> IO.inspect(other, label: "Table creation error")
+      other -> IO.puts(inspect(other), label: "Table creation error")
     end
   end
 
@@ -116,7 +116,6 @@ defmodule Nebulex.Adapters.Mnesia.Table do
         records
 
       err ->
-        IO.inspect err
         {:error, :unexpected}
     end
   end
