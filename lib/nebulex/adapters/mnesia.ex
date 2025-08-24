@@ -11,7 +11,20 @@ defmodule Nebulex.Adapters.Mnesia do
   @impl Nebulex.Adapter
   def init(_opts) do
     child_spec = Supervisor.child_spec({Agent, fn -> :ok end}, id: {Agent, 1})
+
+    check_cluster()
+
     {:ok, child_spec, %{}}
+  end
+
+  def check_cluster do
+    nodes = Node.list() ++ [Node.self()]
+    IO.puts("Setting up Mnesia schema on nodes: #{inspect(nodes)}")
+
+    :mnesia.create_schema(nodes)
+    :ok = :mnesia.start()
+
+    Table.create_table(nodes)
   end
 
   @impl Nebulex.Adapter.Entry
@@ -218,5 +231,19 @@ defmodule Nebulex.Adapters.Mnesia do
 
   defp expired?(touched, ttl) do
     now() > touched + ttl
+  end
+
+  def create_table(nodes \\ nil) do
+    nodes = unless nodes, do: [Node.self()], else: nodes
+
+    Table.create_table(nodes)
+  end
+
+  def copy_table(node) do
+    Table.copy_table(node)
+  end
+
+  def delete_table(node) do
+    Table.delete_table_copy(node)
   end
 end
