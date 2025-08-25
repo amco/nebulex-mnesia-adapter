@@ -9,50 +9,36 @@ defmodule Nebulex.Adapters.Mnesia.Table do
     * `touched` - a timestamp or versioning value (optional usage)
     * `ttl` - time-to-live metadata for expiry logic (optional usage)
 
-  ### Features
-
-  - Initializes the Mnesia schema and creates the table
-  - Supports basic operations like read, write, delete
-  - Provides utilities to list all records or keys
-  - Wraps all operations in `:mnesia.transaction/1` for atomicity and consistency
   """
-
-  use GenServer
 
   alias :mnesia, as: Mnesia
 
   @attrs ~w[key value touched ttl]a
+
+  # TODO: find a way to make this configurable
   @default_table MnesiaCache
 
-  def start_link(opts \\ []) do
-    GenServer.start_link(__MODULE__, opts)
-  end
-
-  def init(opts) do
-    nodes = opts[:nodes] || default_nodes()
-
-    Mnesia.create_schema(nodes)
-    Mnesia.start()
-    Mnesia.create_table(MnesiaCache, attributes: @attrs, disc_copies: nodes)
-
-    {:ok, opts}
-  end
-
-  def bulk_read(keys) when is_list(keys) do
-    fn -> for key <- keys, do: Mnesia.read(cache_table(), key) end
-    |> Mnesia.transaction()
-    |> case do
-      {:atomic, []} ->
-        []
-
-      {:atomic, results} ->
-        results
-        |> Enum.filter(&(&1 != []))
-        |> Enum.map(fn [record] -> record end)
-
-      _other ->
-        []
+  def create_table(nodes) do
+    case Mnesia.create_table(cache_table(), attributes: @attrs, disc_copies: nodes) do
+      {:atomic, :ok} -> :ok
+      {:aborted, {:already_exists, _}} -> :ok
+      other -> IO.puts(inspect(other), label: "Table creation error")
     end
+  end
+
+  def copy_table(node) do
+    case :rpc.call(node, Mnesia, :start, []) do
+      :ok ->
+        IO.puts("Mnesia started on #{inspect(node)}. Adding table copy...")
+        :mnesia.add_table_copy(cache_table(), node, :disc_copies)
+
+      other ->
+        IO.puts(inspect(other), label: "Failed to start Mnesia on new node")
+    end
+  end
+
+  def delete_table_copy(node) do
+    Mnesia.del_table_copy(cache_table(), node)
   end
 
   def bulk_read(keys) when is_list(keys) do
@@ -129,7 +115,7 @@ defmodule Nebulex.Adapters.Mnesia.Table do
       {:atomic, records} ->
         records
 
-      _else ->
+      _error ->
         {:error, :unexpected}
     end
   end
@@ -160,9 +146,5 @@ defmodule Nebulex.Adapters.Mnesia.Table do
 
   defp cache_table do
     @default_table
-  end
-
-  defp default_nodes do
-    [Node.self()] ++ Node.list()
   end
 end
