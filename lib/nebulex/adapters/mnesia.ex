@@ -14,7 +14,9 @@ defmodule Nebulex.Adapters.Mnesia do
   def init(opts) do
     children = [
       Supervisor.child_spec(ClusterCheck, id: Mnesia.ClusterCheck),
-      Supervisor.child_spec({Nebulex.Adapters.Mnesia.ExpirationCheck, opts}, id: Nebulex.Adapters.Mnesia.ExpirationCheck)
+      Supervisor.child_spec({Nebulex.Adapters.Mnesia.ExpirationCheck, opts},
+        id: Nebulex.Adapters.Mnesia.ExpirationCheck
+      )
     ]
 
     child_spec = %{
