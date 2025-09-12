@@ -48,6 +48,16 @@ defmodule MyApp.Cache do
 end
 ```
 
+The adapter will check for expired keys (where ttl has been reached) every  minute by default,
+to change the frequency of this check you can add to your config file:
+
+```elixir
+config :my_app, MyApp.Cache,
+    ttl: 300_000
+```
+
+This will check every 5 minutes and delete the expired cache keys
+
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at <https://hexdocs.pm/nebulex_mnesia_adapter>.
