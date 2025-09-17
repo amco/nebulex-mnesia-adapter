@@ -1,5 +1,5 @@
 defmodule NebulexMnesiaAdapterTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case
   use NebulexMnesiaAdapter.CacheTest
 
   alias NebulexMnesiaAdapter.TestCache, as: Cache
