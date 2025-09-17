@@ -1,5 +1,7 @@
 defmodule Nebulex.Adapters.Mnesia do
-  alias __MODULE__.Table
+  alias __MODULE__.{ClusterCheck, Table}
+
+  require Logger
 
   @behaviour Nebulex.Adapter
   @behaviour Nebulex.Adapter.Queryable
@@ -9,8 +11,18 @@ defmodule Nebulex.Adapters.Mnesia do
   defmacro __before_compile__(_env), do: :ok
 
   @impl Nebulex.Adapter
-  def init(_opts) do
-    child_spec = Supervisor.child_spec({Agent, fn -> :ok end}, id: {Agent, 1})
+  def init(opts) do
+    children = [
+      Supervisor.child_spec(ClusterCheck, id: Mnesia.ClusterCheck),
+      Supervisor.child_spec({Nebulex.Adapters.Mnesia.ExpirationCheck, opts},
+        id: Nebulex.Adapters.Mnesia.ExpirationCheck
+      )
+    ]
+
+    child_spec = %{
+      id: __MODULE__.Supervisor,
+      start: {Supervisor, :start_link, [children, [strategy: :one_for_one]]}
+    }
 
     check_cluster()
 
@@ -19,12 +31,39 @@ defmodule Nebulex.Adapters.Mnesia do
 
   def check_cluster do
     nodes = Node.list() ++ [Node.self()]
-    IO.puts("Setting up Mnesia schema on nodes: #{inspect(nodes)}")
 
     :mnesia.create_schema(nodes)
     :ok = :mnesia.start()
 
     Table.create_table(nodes)
+  end
+
+  @doc """
+  Scan the table and remove expired entries.
+  Returns the number of removed entries.
+  """
+  def clear_expired_keys do
+    case Table.expired_records() do
+      {:atomic, records} when is_list(records) ->
+        records
+        |> Enum.reduce(0, fn
+          {key, _value, _touched, _ttl}, acc ->
+            case Table.delete(key) do
+              :ok ->
+                acc + 1
+
+              _ ->
+                Logger.debug("Failed to delete expired key #{inspect(key)}")
+                acc
+            end
+
+          _other, acc ->
+            acc
+        end)
+
+      _other ->
+        0
+    end
   end
 
   @impl Nebulex.Adapter.Entry

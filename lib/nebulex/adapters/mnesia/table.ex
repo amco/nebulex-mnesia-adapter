@@ -147,4 +147,24 @@ defmodule Nebulex.Adapters.Mnesia.Table do
   defp cache_table do
     @default_table
   end
+
+  def expired_records do
+    today =
+      DateTime.utc_now()
+      |> DateTime.to_unix(:millisecond)
+
+    ms = [
+      {
+        {cache_table(), :"$1", :"$2", :"$3", :"$4"},
+        [
+          {:<, {:+, :"$3", :"$4"}, today}
+        ],
+        [{{:"$1", :"$2", :"$3", :"$4"}}]
+      }
+    ]
+
+    :mnesia.transaction(fn ->
+      :mnesia.select(cache_table(), ms)
+    end)
+  end
 end
