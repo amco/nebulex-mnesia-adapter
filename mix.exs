@@ -2,6 +2,7 @@ defmodule NebulexMnesiaAdapter.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/amco/nebulex-mnesia-adapter"
+  @nbx_vsn "2.6.5"
   @version "0.1.0"
 
   def project do
@@ -11,6 +12,7 @@ defmodule NebulexMnesiaAdapter.MixProject do
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       package: package(),
+      aliases: aliases(),
       deps: deps(),
       docs: docs(),
       source_url: @source_url,
@@ -29,9 +31,26 @@ defmodule NebulexMnesiaAdapter.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      nebulex_dep(),
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
-      {:nebulex, "~> 2.6"}
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
+    ]
+  end
+
+  defp nebulex_dep do
+    if path = System.get_env("NEBULEX_PATH") do
+      {:nebulex, "~> #{@nbx_vsn}", path: path}
+    else
+      {:nebulex, "~> #{@nbx_vsn}"}
+    end
+  end
+
+  defp aliases do
+    [
+      "nbx.setup": [
+        "cmd rm -rf nebulex",
+        "cmd git clone --depth 1 --branch v#{@nbx_vsn} https://github.com/elixir-nebulex/nebulex"
+      ]
     ]
   end
 

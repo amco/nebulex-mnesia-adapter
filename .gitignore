@@ -21,3 +21,6 @@ nebulex_mnesia_adapter-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# Other files to ignore.
+/nebulex
