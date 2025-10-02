@@ -8,12 +8,12 @@ defmodule Nebulex.Adapters.Mnesia.Entry do
   alias Nebulex.Adapters.Mnesia.Utils
 
   @type t :: {
-    table :: atom(),
-    key :: any(),
-    value :: any(),
-    touched :: integer(),
-    ttl :: non_neg_integer() | :infinity
-  }
+          table :: atom(),
+          key :: any(),
+          value :: any(),
+          touched :: integer(),
+          ttl :: non_neg_integer() | :infinity
+        }
 
   @doc """
   Returns the key of the cache entry.

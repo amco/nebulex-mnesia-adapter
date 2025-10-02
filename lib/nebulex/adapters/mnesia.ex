@@ -116,10 +116,7 @@ defmodule Nebulex.Adapters.Mnesia do
   def put_all(adapter_meta, entries, ttl, :put_new, opts) do
     Table.transaction(fn ->
       Enum.all?(entries, fn {key, value} ->
-        case has_key?(adapter_meta, key) do
-          false -> put(adapter_meta, key, value, ttl, :put, opts)
-          true -> false
-        end
+        put(adapter_meta, key, value, ttl, :put_new, opts)
       end)
     end)
   end

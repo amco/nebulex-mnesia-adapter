@@ -27,16 +27,24 @@ defmodule Nebulex.Adapters.Mnesia.Table.Stream do
     Stream.resource(
       fn ->
         :mnesia.transaction(fn ->
-          :mnesia.select(table, [{{table, :"$1", :"$2", :"$3", :"$4"}, query, [:"$_"]}], batch, :read)
+          :mnesia.select(
+            table,
+            [{{table, :"$1", :"$2", :"$3", :"$4"}, query, [:"$_"]}],
+            batch,
+            :read
+          )
         end)
       end,
       fn
-        {:atomic, {[], :'$end_of_table'}} -> {:halt, nil}
-        {:atomic, {entries, cont}} -> {entries, {:cont, cont}}
+        {:atomic, {[], :"$end_of_table"}} ->
+          {:halt, nil}
+
+        {:atomic, {entries, cont}} ->
+          {entries, {:cont, cont}}
 
         {:cont, cont} ->
           case :mnesia.transaction(fn -> :mnesia.select(cont) end) do
-            {:atomic, {[], :'$end_of_table'}} -> {:halt, nil}
+            {:atomic, {[], :"$end_of_table"}} -> {:halt, nil}
             {:atomic, {entries, cont}} -> {entries, {:cont, cont}}
           end
       end,

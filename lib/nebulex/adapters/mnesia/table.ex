@@ -159,7 +159,7 @@ defmodule Nebulex.Adapters.Mnesia.Table do
       {:error, :some_reason}
 
   """
-  @spec transaction((() -> any)) :: any | {:error, term}
+  @spec transaction((-> any)) :: any | {:error, term}
   def transaction(fun) do
     case :mnesia.transaction(fun) do
       {:atomic, result} -> result
