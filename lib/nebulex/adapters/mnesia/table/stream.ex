@@ -21,34 +21,12 @@ defmodule Nebulex.Adapters.Mnesia.Table.Stream do
       iex> Nebulex.Adapters.Mnesia.Table.Stream.select(:table, [], 10) |> Enum.to_list()
       [{:table, :key, "value", 1759420681791, :infinity}, ...]
 
+      iex> query = [{:==, :"$1", :key1}]
+      iex> Nebulex.Adapters.Mnesia.Table.Stream.select(:table, query, 2) |> Enum.to_list()
+      [{:table, :key1, "value1", 1759420681791, :infinity}]
+
   """
   @spec select(atom, list, non_neg_integer) :: Enumerable.t()
-  def select(table, query, batch) do
-    Stream.resource(
-      fn ->
-        :mnesia.transaction(fn ->
-          :mnesia.select(
-            table,
-            [{{table, :"$1", :"$2", :"$3", :"$4"}, query, [:"$_"]}],
-            batch,
-            :read
-          )
-        end)
-      end,
-      fn
-        {:atomic, {[], :"$end_of_table"}} ->
-          {:halt, nil}
-
-        {:atomic, {entries, cont}} ->
-          {entries, {:cont, cont}}
-
-        {:cont, cont} ->
-          case :mnesia.transaction(fn -> :mnesia.select(cont) end) do
-            {:atomic, {[], :"$end_of_table"}} -> {:halt, nil}
-            {:atomic, {entries, cont}} -> {entries, {:cont, cont}}
-          end
-      end,
-      fn _ -> :ok end
-    )
+  def select(_table, _query, _batch) do
   end
 end

@@ -7,7 +7,7 @@ defmodule Nebulex.Adapters.Mnesia do
 
   ## Options
 
-    * `:table` - The name of the Mnesia table to use. Defaults to `:mnesia_cache`.
+    * `:table` - The name of the Mnesia table to use..
 
     * `:cleanup_interval` - The interval in milliseconds for cleaning up expired
       entries. Defaults to `1_000 * 60 * 60 * 6` (6 hours).
@@ -38,7 +38,8 @@ defmodule Nebulex.Adapters.Mnesia do
 
   @impl Nebulex.Adapter
   def init(opts) do
-    table = Keyword.get(opts, :table, :mnesia_cache)
+    cache = Keyword.fetch!(opts, :cache)
+    table = Keyword.get(opts, :table, cache)
 
     children = [
       {Cluster, opts},

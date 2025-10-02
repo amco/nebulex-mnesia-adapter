@@ -7,7 +7,6 @@ defmodule Nebulex.Adapters.Mnesia.Cluster do
 
   use GenServer
 
-  @default_table :mnesia_cache
   @table_attrs ~w[key value touched ttl]a
 
   def start_link(opts) do
@@ -17,7 +16,8 @@ defmodule Nebulex.Adapters.Mnesia.Cluster do
   def init(opts) do
     :mnesia.start()
     :net_kernel.monitor_nodes(true)
-    table = Keyword.get(opts, :table, @default_table)
+    cache = Keyword.fetch!(opts, :cache)
+    table = Keyword.get(opts, :table, cache)
     master = Keyword.get(opts, :master_node, false)
     if master, do: create_schema_and_table(table)
     {:ok, %{table: table, master: master}}
