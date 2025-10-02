@@ -1,22 +1,48 @@
 defmodule Nebulex.Adapters.Mnesia do
-  alias __MODULE__.{ClusterCheck, Table}
+  @moduledoc """
+  This module implements a Nebulex cache adapter using Mnesia as the
+  underlying storage mechanism. It provides functions for cache operations
+  such as `get`, `put`, `delete`, and more, while also handling expiration
+  of cache entries.
 
-  require Logger
+  ## Options
 
+    * `:table` - The name of the Mnesia table to use. Defaults to `:mnesia_cache`.
+
+    * `:cleanup_interval` - The interval in milliseconds for cleaning up expired
+      entries. Defaults to `1_000 * 60 * 60 * 6` (6 hours).
+
+  ## Example
+
+      defmodule MyApp.MnesiaCache do
+        use Nebulex.Cache,
+          otp_app: :my_app,
+          adapter: Nebulex.Adapters.Mnesia
+      end
+
+      config :my_app, MyApp.MnesiaCache,
+        table: :my_cache_table,
+        cleanup_interval: 1_000 * 60 * 60 * 6
+
+  """
+
+  # Provide Cache Implementation
   @behaviour Nebulex.Adapter
-  @behaviour Nebulex.Adapter.Queryable
   @behaviour Nebulex.Adapter.Entry
+  @behaviour Nebulex.Adapter.Queryable
 
-  @impl Nebulex.Adapter
+  alias __MODULE__.{Cluster, Expiration, Table, Entry, Utils}
+
+  @impl true
   defmacro __before_compile__(_env), do: :ok
 
   @impl Nebulex.Adapter
   def init(opts) do
+    table = Keyword.get(opts, :table, :mnesia_cache)
+
     children = [
-      Supervisor.child_spec(ClusterCheck, id: Mnesia.ClusterCheck),
-      Supervisor.child_spec({Nebulex.Adapters.Mnesia.ExpirationCheck, opts},
-        id: Nebulex.Adapters.Mnesia.ExpirationCheck
-      )
+      {Cluster, opts},
+      {Expiration, opts}
     ]
 
     child_spec = %{
@@ -24,265 +50,203 @@ defmodule Nebulex.Adapters.Mnesia do
       start: {Supervisor, :start_link, [children, [strategy: :one_for_one]]}
     }
 
-    check_cluster()
-
-    {:ok, child_spec, %{}}
+    {:ok, child_spec, %{table: table}}
   end
 
-  def check_cluster do
-    nodes = Node.list() ++ [Node.self()]
-
-    :mnesia.create_schema(nodes)
-    :ok = :mnesia.start()
-
-    Table.create_table(nodes)
-  end
-
-  @doc """
-  Scan the table and remove expired entries.
-  Returns the number of removed entries.
-  """
-  def clear_expired_keys do
-    case Table.expired_records() do
-      {:atomic, records} when is_list(records) ->
-        records
-        |> Enum.reduce(0, fn
-          {key, _value, _touched, _ttl}, acc ->
-            case Table.delete(key) do
-              :ok ->
-                acc + 1
-
-              _ ->
-                Logger.debug("Failed to delete expired key #{inspect(key)}")
-                acc
-            end
-
-          _other, acc ->
-            acc
-        end)
-
-      _other ->
-        0
-    end
-  end
+  ## Nebulex.Adapter.Entry
 
   @impl Nebulex.Adapter.Entry
-  def get(_adapder_meta, key, _opts) do
-    Table.read(key)
-    |> case do
-      {_table, _key, _value, _touched, _ttl} = record ->
-        handle_expired(record)
-
-      _other ->
-        nil
-    end
-  end
-
-  defp handle_expired({_, _, value, _touched, :infinity}), do: value
-
-  defp handle_expired({_, key, value, touched, ttl}) do
-    with true <- expired?(touched, ttl),
-         :ok <- Table.delete(key) do
-      nil
-    else
-      _ -> value
-    end
-  end
-
-  @impl Nebulex.Adapter.Entry
-  def get_all(_adapder_meta, keys, _opts) do
-    Table.bulk_read(keys)
-    |> Enum.map(fn record ->
-      case record do
-        {_table, key, value, _touched, _ttl} -> {key, value}
-        _other -> nil
+  def get(%{table: table}, key, _opts) do
+    Table.transaction(fn ->
+      with {:ok, entry} <- Table.read(table, key),
+           {:ok, :active} <- Entry.status(entry) do
+        Entry.value(entry)
+      else
+        {:error, :not_found} -> nil
+        {:error, :expired} -> delete_and_return(table, key, nil)
       end
     end)
-    |> Enum.filter(& &1)
-    |> Enum.into(%{})
   end
 
   @impl Nebulex.Adapter.Entry
-  def put(_adapter_meta, key, value, ttl, on_write, opts)
+  def get_all(%{table: table}, keys, _opts) do
+    Table.transaction(fn ->
+      Enum.reduce(keys, %{}, fn key, acc ->
+        with {:ok, entry} <- Table.read(table, key),
+             {:ok, :active} <- Entry.status(entry) do
+          Map.put(acc, key, Entry.value(entry))
+        else
+          {:error, :not_found} -> acc
+          {:error, :expired} -> delete_and_return(table, key, acc)
+        end
+      end)
+    end)
+  end
+
+  @impl Nebulex.Adapter.Entry
+  def put(%{table: table}, key, value, ttl, :put, _opts) do
+    Table.transaction(fn ->
+      :ok == Table.write(table, key, value, Utils.now(), ttl)
+    end)
+  end
 
   def put(adapter_meta, key, value, ttl, :put_new, opts) do
-    case get(adapter_meta, key, opts) do
-      nil ->
-        put(adapter_meta, key, value, ttl, :put, opts)
-
-      _other ->
-        false
+    case has_key?(adapter_meta, key) do
+      false -> put(adapter_meta, key, value, ttl, :put, opts)
+      true -> false
     end
   end
 
-  @impl Nebulex.Adapter.Entry
   def put(adapter_meta, key, value, ttl, :replace, opts) do
-    case get(adapter_meta, key, opts) do
-      nil ->
-        false
+    case has_key?(adapter_meta, key) do
+      true -> put(adapter_meta, key, value, ttl, :put, opts)
+      false -> false
+    end
+  end
 
-      _other ->
+  @impl Nebulex.Adapter.Entry
+  def put_all(adapter_meta, entries, ttl, :put, opts) do
+    Table.transaction(fn ->
+      Enum.all?(entries, fn {key, value} ->
         put(adapter_meta, key, value, ttl, :put, opts)
-    end
+      end)
+    end)
   end
 
-  @impl Nebulex.Adapter.Entry
-  def put(_adapter_meta, key, value, ttl, _on_write, _opts) do
-    Table.write({key, value, now(), ttl})
-    |> Kernel.==(:ok)
-  end
-
-  @impl Nebulex.Adapter.Entry
   def put_all(adapter_meta, entries, ttl, :put_new, opts) do
-    case get_all(adapter_meta, Map.keys(entries), opts) do
-      records when records == %{} ->
-        for({key, value} <- entries, do: {key, value, now(), ttl})
-        |> Table.bulk_write()
-
-      _other ->
-        false
-    end
+    Table.transaction(fn ->
+      Enum.all?(entries, fn {key, value} ->
+        case has_key?(adapter_meta, key) do
+          false -> put(adapter_meta, key, value, ttl, :put, opts)
+          true -> false
+        end
+      end)
+    end)
   end
 
   @impl Nebulex.Adapter.Entry
-  def put_all(_adapter_meta, entries, ttl, _on_write, _opts) do
-    for {key, value} <- entries,
-        do: Table.write({key, value, now(), ttl})
+  def delete(%{table: table}, key, _opts) do
+    Table.transaction(fn ->
+      Table.delete(table, key)
+    end)
   end
 
   @impl Nebulex.Adapter.Entry
-  def delete(_adapter_meta, key, _opt) do
-    Table.delete(key)
-  end
-
-  @impl Nebulex.Adapter.Entry
-  def take(adapter_meta, key, opt) do
-    case get(adapter_meta, key, opt) do
-      nil ->
-        nil
-
-      obj ->
-        delete(adapter_meta, key, opt)
-        obj
-    end
-  end
-
-  @impl Nebulex.Adapter.Entry
-  def has_key?(adapter_meta, key) do
-    !!get(adapter_meta, key, [])
-  end
-
-  @impl Nebulex.Adapter.Entry
-  def update_counter(_adapter_meta, key, amount, ttl, default, _opts) do
-    count =
-      case Table.read(key) do
-        nil ->
-          if default, do: default + amount, else: amount
-
-        {_table, ^key, value, touched, _stored_ttl} ->
-          if expired?(touched, ttl), do: default + amount, else: value + amount
+  def take(%{table: table}, key, _opts) do
+    Table.transaction(fn ->
+      with {:ok, entry} <- Table.read(table, key),
+           {:ok, :active} <- Entry.status(entry) do
+        delete_and_return(table, key, Entry.value(entry))
+      else
+        {:error, :not_found} -> nil
+        {:error, :expired} -> delete_and_return(table, key, nil)
       end
-
-    Table.write({key, count, now(), ttl})
-    |> case do
-      :ok -> count
-      _other -> {:error, :counter_error}
-    end
+    end)
   end
 
   @impl Nebulex.Adapter.Entry
-  def ttl(_adapter_meta, key) do
-    Table.read(key)
-    |> case do
-      {_table, _key, _value, touched, ttl} ->
-        remaining_time(touched, ttl)
-
-      _other ->
-        nil
-    end
+  def update_counter(%{table: table} = adapter_meta, key, amount, ttl, default, opts) do
+    counter = get_new_counter_value(table, key, amount, default)
+    put(adapter_meta, key, counter, ttl, :put, opts)
+    counter
   end
 
-  defp remaining_time(_touched, :infinity), do: :infinity
-
-  defp remaining_time(touched, ttl) do
-    with time_left <- touched + ttl - now(),
-         true <- time_left > 0 do
-      time_left
-    else
-      _ -> nil
-    end
+  defp get_new_counter_value(table, key, amount, default) do
+    Table.transaction(fn ->
+      with {:ok, entry} <- Table.read(table, key),
+           {:ok, :active} <- Entry.status(entry) do
+        Entry.value(entry) + amount
+      else
+        {:error, :not_found} -> default + amount
+        {:error, :expired} -> default + amount
+      end
+    end)
   end
 
   @impl Nebulex.Adapter.Entry
-  def touch(adapter_meta, key) do
-    value = get(adapter_meta, key, [])
-    ttl = ttl(adapter_meta, key)
-
-    has_key?(adapter_meta, key) &&
-      Table.write({key, value, now(), ttl}) == :ok
+  def has_key?(%{table: table}, key) do
+    Table.transaction(fn ->
+      with {:ok, entry} <- Table.read(table, key),
+           {:ok, :active} <- Entry.status(entry) do
+        true
+      else
+        {:error, :not_found} -> false
+        {:error, :expired} -> delete_and_return(table, key, false)
+      end
+    end)
   end
 
   @impl Nebulex.Adapter.Entry
-  def expire(adapter_meta, key, ttl) do
-    value = get(adapter_meta, key, [])
+  def ttl(%{table: table}, key) do
+    Table.transaction(fn ->
+      with {:ok, entry} <- Table.read(table, key),
+           {:ok, :active} <- Entry.status(entry) do
+        Entry.remaining_ttl(entry)
+      else
+        {:error, :not_found} -> nil
+        {:error, :expired} -> nil
+      end
+    end)
+  end
 
-    has_key?(adapter_meta, key) &&
-      Table.write({key, value, now(), ttl}) == :ok
+  @impl Nebulex.Adapter.Entry
+  def expire(%{table: table}, key, ttl) do
+    Table.transaction(fn ->
+      case Table.read(table, key) do
+        {:ok, {_, _, value, touched, _}} ->
+          Table.write(table, key, value, touched, ttl)
+
+        {:error, :not_found} ->
+          false
+      end
+    end)
+  end
+
+  @impl Nebulex.Adapter.Entry
+  def touch(%{table: table}, key) do
+    Table.transaction(fn ->
+      case Table.read(table, key) do
+        {:ok, {_, _, value, _, ttl}} ->
+          Table.write(table, key, value, Utils.now(), ttl)
+
+        {:error, :not_found} ->
+          false
+      end
+    end)
+  end
+
+  ## Nebulex.Adapter.Queryable
+
+  @impl Nebulex.Adapter.Queryable
+  def execute(%{table: table}, :all, query, _opts) do
+    Table.transaction(fn ->
+      Table.select(table, query)
+    end)
   end
 
   @impl Nebulex.Adapter.Queryable
-  def execute(_adapter_meta, :all, nil, _opts) do
-    Table.all_records()
-    |> Enum.map(fn {_table, key, _value, _touched, _ttl} -> key end)
+  def execute(%{table: table}, :delete_all, query, _opts) do
+    Table.transaction(fn ->
+      Table.select(table, query)
+      |> Enum.count(fn entry ->
+        :ok == Table.delete(table, Entry.key(entry))
+      end)
+    end)
   end
 
   @impl Nebulex.Adapter.Queryable
-  def execute(_adapter_meta, :delete_all, _query, _opts) do
-    Table.clear!() |> length()
+  def execute(adapter_meta, :count_all, query, opts) do
+    execute(adapter_meta, :all, query, opts) |> length()
   end
 
   @impl Nebulex.Adapter.Queryable
-  def execute(_adapter_meta, :count_all, nil, _opts) do
-    Table.all_keys()
-    |> length()
+  def stream(%{table: table}, query, opts) do
+    batch = Keyword.get(opts, :batch, 50)
+    Table.stream(table, query, batch)
   end
 
-  @impl Nebulex.Adapter.Queryable
-  def stream(_adapter_meta, nil, opts) do
-    Nebulex.Adapters.Mnesia.Stream.call(opts)
-  end
-
-  @doc """
-  All queries are invalid, as it is not supported by mnesia on streams
-  """
-  @impl Nebulex.Adapter.Queryable
-  def stream(_adapter_meta, query, _opts) do
-    raise Nebulex.QueryError, message: "invalid match spec", query: query
-  end
-
-  defp now do
-    :os.system_time(:millisecond)
-  end
-
-  defp expired?(_touched, :infinity) do
-    false
-  end
-
-  defp expired?(touched, ttl) do
-    now() > touched + ttl
-  end
-
-  def create_table(nodes \\ nil) do
-    nodes = unless nodes, do: [Node.self()], else: nodes
-
-    Table.create_table(nodes)
-  end
-
-  def copy_table(node) do
-    Table.copy_table(node)
-  end
-
-  def delete_table(node) do
-    Table.delete_table_copy(node)
+  defp delete_and_return(table, key, return) do
+    :ok = Table.delete(table, key)
+    return
   end
 end
