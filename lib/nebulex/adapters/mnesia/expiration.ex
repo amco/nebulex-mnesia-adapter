@@ -12,6 +12,8 @@ defmodule Nebulex.Adapters.Mnesia.Expiration do
 
   use GenServer
 
+  alias Nebulex.Adapters.Mnesia.Utils
+
   @doc "Default cleanup interval in milliseconds of 6 hours."
   @default_interval 1_000 * 60 * 60 * 6
 
@@ -20,17 +22,24 @@ defmodule Nebulex.Adapters.Mnesia.Expiration do
   end
 
   def init(opts) do
+    cache = Keyword.fetch!(opts, :cache)
     interval = Keyword.get(opts, :cleanup_interval, @default_interval)
     schedule_cleanup(interval)
-    {:ok, %{interval: interval}}
+    {:ok, %{cache: cache, interval: interval}}
   end
 
-  def handle_info(:clean, %{interval: interval} = state) do
+  def handle_info(:clean, %{cache: cache, interval: interval} = state) do
+    delete_expired_entries(cache)
     schedule_cleanup(interval)
     {:noreply, state}
   end
 
   defp schedule_cleanup(interval) do
     Process.send_after(self(), :clean, interval)
+  end
+
+  defp delete_expired_entries(cache) do
+    query = [{:<, {:+, :"$3", :"$4"}, Utils.now()}]
+    cache.delete_all(query)
   end
 end
