@@ -38,61 +38,61 @@ defmodule Nebulex.Adapters.Mnesia.Table.Stream do
   """
   @spec select(atom, keyword) :: Enumerable.t()
   def select(table, opts) do
-    return = Keyword.get(opts, :return, :key)
-
     Stream.resource(
-      fn ->
-        :mnesia.transaction(fn ->
-          :mnesia.first(table)
-        end)
-      end,
-      fn
-        {:atomic, :"$end_of_table"} ->
-          {:halt, nil}
-
-        {:atomic, key} ->
-          {fetch(table, key, return), {:cont, key}}
-
-        {:cont, key} ->
-          case :mnesia.transaction(fn -> :mnesia.next(table, key) end) do
-            {:atomic, :"$end_of_table"} ->
-              {:halt, nil}
-
-            {:atomic, next_key} ->
-              {fetch(table, next_key, return), {:cont, next_key}}
-          end
-
-        _ ->
-          {:halt, nil}
-      end,
-      fn _ -> :ok end
+      fn -> start_entry(table) end,
+      fn acc -> next(acc, table, opts) end,
+      fn _acc -> :ok end
     )
   end
 
-  defp fetch(table, key, return) do
-    case return do
-      :key ->
-        [key]
+  defp next({:first, key}, table, opts), do: fetch_acc(table, key, opts)
+  defp next({:cont, key}, table, opts), do: next_entry(table, key, opts)
+  defp next({:halt, nil}, _table, _opts), do: {:halt, nil}
 
-      :value ->
-        fetch_value(table, key)
+  defp start_entry(table) do
+    Table.transaction(fn ->
+      case Table.first(table) do
+        {:ok, key} -> {:first, key}
+        {:error, :not_found} -> {:halt, nil}
+      end
+    end)
+  end
 
-      {:key, :value} ->
-        case fetch_value(table, key) do
-          [value] -> [{key, value}]
-          [] -> []
-        end
+  defp next_entry(table, key, opts) do
+    Table.transaction(fn ->
+      case Table.next(table, key) do
+        {:ok, key} -> fetch_acc(table, key, opts)
+        {:error, :not_found} -> {:halt, nil}
+      end
+    end)
+  end
+
+  defp fetch_acc(table, key, opts) do
+    return = Keyword.get(opts, :return, :key)
+    {fetch(table, key, return), {:cont, key}}
+  end
+
+  defp fetch(_table, key, :key), do: [key]
+
+  defp fetch(table, key, :value) do
+    case fetch_entry(table, key) do
+      {:ok, entry} -> [Entry.value(entry)]
+      _error -> []
     end
   end
 
-  defp fetch_value(table, key) do
+  defp fetch(table, key, {:key, :value}) do
+    case fetch_entry(table, key) do
+      {:ok, entry} -> [{key, Entry.value(entry)}]
+      _error -> []
+    end
+  end
+
+  defp fetch_entry(table, key) do
     Table.transaction(fn ->
       with {:ok, entry} <- Table.read(table, key),
            {:ok, :active} <- Entry.status(entry) do
-        [Entry.value(entry)]
-      else
-        {:error, :not_found} -> []
-        {:error, :expired} -> []
+        {:ok, entry}
       end
     end)
   end

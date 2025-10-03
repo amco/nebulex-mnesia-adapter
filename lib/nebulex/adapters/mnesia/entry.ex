@@ -126,7 +126,7 @@ defmodule Nebulex.Adapters.Mnesia.Entry do
     case remaining_ttl(entry) do
       :infinity -> {:ok, :active}
       remaining when remaining > 0 -> {:ok, :active}
-      _ -> {:error, :expired}
+      _other -> {:error, :expired}
     end
   end
 end

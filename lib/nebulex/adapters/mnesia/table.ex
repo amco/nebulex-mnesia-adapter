@@ -36,6 +36,65 @@ defmodule Nebulex.Adapters.Mnesia.Table do
   end
 
   @doc """
+  Retrieves the first key from the specified Mnesia table.
+
+  ## Parameters
+
+    - `table`: The name of the Mnesia table (atom).
+
+  ## Returns
+
+    - `{:ok, key}`: If the table has entries and the first key is found.
+    - `{:error, :not_found}`: If the table is empty.
+
+  ## Examples
+
+      iex> Nebulex.Adapters.Mnesia.Table.first(:table)
+      {:ok, :first_key}
+
+      iex> Nebulex.Adapters.Mnesia.Table.first(:empty_table)
+      {:error, :not_found}
+
+  """
+  @spec first(atom) :: {:ok, term} | {:error, :not_found}
+  def first(table) do
+    case :mnesia.first(table) do
+      :"$end_of_table" -> {:error, :not_found}
+      key -> {:ok, key}
+    end
+  end
+
+  @doc """
+  Retrieves the next key in the specified Mnesia table after the given key.
+
+  ## Parameters
+
+    - `table`: The name of the Mnesia table (atom).
+    - `key`: The current key (term).
+
+  ## Returns
+
+    - `{:ok, next_key}`: If the next key is found.
+    - `{:error, :not_found}`: If there is no next key (end of table).
+
+  ## Examples
+
+      iex> Nebulex.Adapters.Mnesia.Table.next(:table, :current_key)
+      {:ok, :next_key}
+
+      iex> Nebulex.Adapters.Mnesia.Table.next(:table, :last_key)
+      {:error, :not_found}
+
+  """
+  @spec next(atom, term) :: {:ok, term} | {:error, :not_found}
+  def next(table, key) do
+    case :mnesia.next(table, key) do
+      :"$end_of_table" -> {:error, :not_found}
+      next_key -> {:ok, next_key}
+    end
+  end
+
+  @doc """
   Writes a key-value pair to the specified Mnesia table.
 
   ## Parameters

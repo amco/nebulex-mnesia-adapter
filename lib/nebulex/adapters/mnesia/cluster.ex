@@ -24,7 +24,7 @@ defmodule Nebulex.Adapters.Mnesia.Cluster do
   end
 
   def handle_info({:nodeup, _node}, %{table: table, master: master} = state) do
-    if !master, do: add_table_copy(table)
+    unless master, do: add_table_copy(table)
     {:noreply, state}
   end
 
