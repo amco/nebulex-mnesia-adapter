@@ -38,7 +38,8 @@ defmodule NebulexMnesiaAdapter.MixProject do
     [
       nebulex_dep(),
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
+      {:stream_data, "~> 1.1", only: [:dev, :test]}
     ]
   end
 

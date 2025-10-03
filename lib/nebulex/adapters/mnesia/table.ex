@@ -85,58 +85,67 @@ defmodule Nebulex.Adapters.Mnesia.Table do
   end
 
   @doc """
-  Selects entries from the specified Mnesia table based on a query.
+  Selects entries from the specified Mnesia table based on given options.
 
   ## Parameters
 
     - `table`: The name of the Mnesia table (atom).
-    - `query`: The selection query (tuple or nil).
+    - `opts`: A keyword list of options.
+      - `:guards` - A list of guard conditions (default: `[]`).
+      - `:return` - A list specifying which attributes to return (default: `[:"$1"]`).
 
   ## Returns
 
-    - A list of matching entries (list of tuples).
+    - A list of selected entries.
 
   ## Examples
 
-      iex> Nebulex.Adapters.Mnesia.Table.select(:table)
-      [{:table, :key, "value", 1759420681791, :infinity}]
+      iex> guards = [:"$2" > 10]
+      iex> return = [:"$1", :"$2"]
+      iex> Nebulex.Adapters.Mnesia.Table.select(:table, guards: guards, return: return)
+      [{:key1, 15}, {:key2, 20}]
 
-      iex> Nebulex.Adapters.Mnesia.Table.select(:table, [:"$1 == :key1"])
-      [{:table, :key, "value", 1759420681791, :infinity}]
+      iex> Nebulex.Adapters.Mnesia.Table.select(:table)
+      [:key1, :key2, :key3]
 
   """
-  @spec select(atom, tuple | nil) :: [tuple]
-  def select(table, nil), do: select(table, [])
-
-  def select(table, query) do
-    :mnesia.select(table, [{{table, :"$1", :"$2", :"$3", :"$4"}, query, [:"$_"]}])
+  @spec select(atom, keyword) :: [term]
+  def select(table, opts \\ []) do
+    guards = Keyword.get(opts, :guards, [])
+    return = Keyword.get(opts, :return, [:"$1"])
+    attrs = {table, :"$1", :"$2", :"$3", :"$4"}
+    :mnesia.select(table, [{attrs, guards, return}])
   end
 
   @doc """
-  Streams entries from the specified Mnesia table in batches.
+  Streams entries from the specified Mnesia table based on given options.
 
   ## Parameters
 
     - `table`: The name of the Mnesia table (atom).
-    - `query`: The selection query (tuple or nil).
-    - `batch`: The batch size for streaming (non-negative integer).
+    - `opts`: A keyword list of options (same as in `select/2`).
 
   ## Returns
 
-    - An enumerable stream of matching entries.
+    - A stream of selected entries.
 
   ## Examples
 
-      iex> Nebulex.Adapters.Mnesia.Table.stream(:table, 2) |> Enum.to_list()
-      [{:table, :key1, "value1", 1759420681791, :infinity}]
+      iex> opts = [return: :key]
+      iex> Nebulex.Adapters.Mnesia.Table.stream(:table, opts) |> Enum.to_list()
+      [:key1, :key2, :key3]
 
-      iex> Nebulex.Adapters.Mnesia.Table.stream(:table, [:"$1 == :key1"], 2) |> Enum.to_list()
-      [{:table, :key1, "value1", 1759420681791, :infinity}]
+      iex> opts = [return: :value]
+      iex> Nebulex.Adapters.Mnesia.Table.stream(:table, opts) |> Enum.to_list()
+      [value1, value2, value3]
+
+      iex> opts = [return: {:key, :value}]
+      iex> Nebulex.Adapters.Mnesia.Table.stream(:table, opts) |> Enum.to_list()
+      [{:key1, value1}, {:key2, value2}, {:key3, value3}]
 
   """
-  @spec stream(atom, tuple | nil, non_neg_integer) :: Enumerable.t()
-  def stream(table, nil, batch), do: stream(table, [], batch)
-  def stream(table, query, batch), do: Stream.select(table, query, batch)
+  @spec stream(atom, keyword) :: Enumerable.t()
+  def stream(table, opts), do: Stream.select(table, opts)
 
   @doc """
   Wraps a function in a Mnesia transaction.

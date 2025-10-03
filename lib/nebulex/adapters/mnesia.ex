@@ -144,19 +144,19 @@ defmodule Nebulex.Adapters.Mnesia do
 
   @impl Nebulex.Adapter.Entry
   def update_counter(%{table: table} = adapter_meta, key, amount, ttl, default, opts) do
-    counter = get_new_counter_value(table, key, amount, default)
+    {counter, ttl} = get_new_counter_value(table, key, amount, default, ttl)
     put(adapter_meta, key, counter, ttl, :put, opts)
     counter
   end
 
-  defp get_new_counter_value(table, key, amount, default) do
+  defp get_new_counter_value(table, key, amount, default, ttl) do
     Table.transaction(fn ->
       with {:ok, entry} <- Table.read(table, key),
            {:ok, :active} <- Entry.status(entry) do
-        Entry.value(entry) + amount
+        {Entry.value(entry) + amount, Entry.ttl(entry)}
       else
-        {:error, :not_found} -> default + amount
-        {:error, :expired} -> default + amount
+        {:error, :not_found} -> {default + amount, ttl}
+        {:error, :expired} -> {default + amount, ttl}
       end
     end)
   end
@@ -216,6 +216,12 @@ defmodule Nebulex.Adapters.Mnesia do
   ## Nebulex.Adapter.Queryable
 
   @impl Nebulex.Adapter.Queryable
+  def execute(%{table: table}, :all, nil, opts) do
+    Table.transaction(fn ->
+      Table.select(table, opts)
+    end)
+  end
+
   def execute(%{table: table}, :all, query, _opts) do
     Table.transaction(fn ->
       Table.select(table, query)
@@ -223,11 +229,20 @@ defmodule Nebulex.Adapters.Mnesia do
   end
 
   @impl Nebulex.Adapter.Queryable
+  def execute(%{table: table}, :delete_all, nil, opts) do
+    Table.transaction(fn ->
+      Table.select(table, opts)
+      |> Enum.count(fn key ->
+        :ok == Table.delete(table, key)
+      end)
+    end)
+  end
+
   def execute(%{table: table}, :delete_all, query, _opts) do
     Table.transaction(fn ->
       Table.select(table, query)
-      |> Enum.count(fn entry ->
-        :ok == Table.delete(table, Entry.key(entry))
+      |> Enum.count(fn key ->
+        :ok == Table.delete(table, key)
       end)
     end)
   end
@@ -238,9 +253,14 @@ defmodule Nebulex.Adapters.Mnesia do
   end
 
   @impl Nebulex.Adapter.Queryable
-  def stream(%{table: table}, query, opts) do
-    batch = Keyword.get(opts, :batch, 50)
-    Table.stream(table, query, batch)
+  def stream(%{table: table}, nil, opts) do
+    Table.stream(table, opts)
+  end
+
+  def stream(_adapter_meta, query, _opts) do
+    raise Nebulex.QueryError,
+      message: "Query not supported.",
+      query: query
   end
 
   defp delete_and_return(table, key, return) do

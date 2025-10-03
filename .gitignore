@@ -24,3 +24,4 @@ nebulex_mnesia_adapter-*.tar
 
 # Other files to ignore.
 /nebulex
+/Mnesia*
