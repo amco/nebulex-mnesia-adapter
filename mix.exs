@@ -11,6 +11,7 @@ defmodule NebulexMnesiaAdapter.MixProject do
       version: @version,
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
+      elixirc_paths: elixirc_paths(Mix.env()),
       package: package(),
       aliases: aliases(),
       deps: deps(),
@@ -27,6 +28,10 @@ defmodule NebulexMnesiaAdapter.MixProject do
       extra_applications: [:logger]
     ]
   end
+
+  # Specifies which paths to compile per environment.
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
