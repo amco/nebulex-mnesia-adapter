@@ -1,16 +1,23 @@
 defmodule NebulexMnesiaAdapter.MixProject do
   use Mix.Project
 
+  @source_url "https://github.com/amco/nebulex-mnesia-adapter"
   @nbx_vsn "2.6.5"
+  @version "2.6.5"
 
   def project do
     [
       app: :nebulex_mnesia_adapter,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.18",
+      start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
+      package: package(),
       aliases: aliases(),
-      deps: deps()
+      deps: deps(),
+      docs: docs(),
+      source_url: @source_url,
+      homepage_url: @source_url
     ]
   end
 
@@ -22,6 +29,7 @@ defmodule NebulexMnesiaAdapter.MixProject do
     ]
   end
 
+  # Specifies which paths to compile per environment.
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
 
@@ -29,8 +37,9 @@ defmodule NebulexMnesiaAdapter.MixProject do
   defp deps do
     [
       nebulex_dep(),
-      {:stream_data, "~> 1.1", only: [:dev, :test]},
-      {:telemetry, "~> 0.4 or ~> 1.0", optional: true}
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
+      {:stream_data, "~> 1.1", only: [:dev, :test]}
     ]
   end
 
@@ -48,6 +57,27 @@ defmodule NebulexMnesiaAdapter.MixProject do
         "cmd rm -rf nebulex",
         "cmd git clone --depth 1 --branch v#{@nbx_vsn} https://github.com/elixir-nebulex/nebulex"
       ]
+    ]
+  end
+
+  defp docs do
+    [
+      main: "readme",
+      formatters: ["html"],
+      extras: ["CHANGELOG.md", "CONTRIBUTING.md", "README.md"]
+    ]
+  end
+
+  defp package do
+    [
+      description: "Nebulex adapter for Mnesia",
+      files: ["lib", "mix.exs", "README.md", "CHANGELOG.md", "CONTRIBUTING.md", "LICENSE"],
+      maintainers: ["Javier Guerra", "Alejandro Gutiérrez"],
+      licenses: ["MIT"],
+      links: %{
+        GitHub: @source_url,
+        Changelog: "https://hexdocs.pm/nebulex_mnesia_adapter/changelog.html"
+      }
     ]
   end
 end

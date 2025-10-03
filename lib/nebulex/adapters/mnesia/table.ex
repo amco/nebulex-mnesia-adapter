@@ -1,170 +1,238 @@
 defmodule Nebulex.Adapters.Mnesia.Table do
   @moduledoc """
-  Provides a lightweight abstraction over an Mnesia table used as a simple key-value store.
-
-  This module manages a single Mnesia table with the following attributes:
-
-    * `key` - the identifier for the record (primary key)
-    * `value` - the value stored for the key
-    * `touched` - a timestamp or versioning value (optional usage)
-    * `ttl` - time-to-live metadata for expiry logic (optional usage)
-
+  This module provides basic operations for interacting with Mnesia tables.
   """
 
+  alias __MODULE__.Stream
   alias :mnesia, as: Mnesia
 
-  @attrs ~w[key value touched ttl]a
+  @doc """
+  Reads an entry from the specified Mnesia table by key.
 
-  # TODO: find a way to make this configurable
-  @default_table MnesiaCache
+  ## Parameters
 
-  def create_table(nodes) do
-    case Mnesia.create_table(cache_table(), attributes: @attrs, disc_copies: nodes) do
-      {:atomic, :ok} -> :ok
-      {:aborted, {:already_exists, _}} -> :ok
-      other -> IO.puts(inspect(other), label: "Table creation error")
+    - `table`: The name of the Mnesia table (atom).
+    - `key`: The key to look up (term).
+
+  ## Returns
+
+    - `{:ok, entry}`: If the entry is found.
+    - `{:error, :not_found}`: If the entry is not found.
+
+  ## Examples
+
+      iex> Nebulex.Adapters.Mnesia.Table.read(:table, :key)
+      {:ok, {:table, :key, "value", 1759420681791, :infinity}}
+
+      iex> Nebulex.Adapters.Mnesia.Table.read(:table, :unknown_key)
+      {:error, :not_found}
+
+  """
+  @spec read(atom, term) :: {:ok, tuple} | {:error, :not_found}
+  def read(table, key) do
+    case Mnesia.read({table, key}) do
+      [entry] -> {:ok, entry}
+      [] -> {:error, :not_found}
     end
   end
 
-  def copy_table(node) do
-    case :rpc.call(node, Mnesia, :start, []) do
-      :ok ->
-        IO.puts("Mnesia started on #{inspect(node)}. Adding table copy...")
-        :mnesia.add_table_copy(cache_table(), node, :disc_copies)
+  @doc """
+  Retrieves the first key from the specified Mnesia table.
 
-      other ->
-        IO.puts(inspect(other), label: "Failed to start Mnesia on new node")
+  ## Parameters
+
+    - `table`: The name of the Mnesia table (atom).
+
+  ## Returns
+
+    - `{:ok, key}`: If the table has entries and the first key is found.
+    - `{:error, :not_found}`: If the table is empty.
+
+  ## Examples
+
+      iex> Nebulex.Adapters.Mnesia.Table.first(:table)
+      {:ok, :first_key}
+
+      iex> Nebulex.Adapters.Mnesia.Table.first(:empty_table)
+      {:error, :not_found}
+
+  """
+  @spec first(atom) :: {:ok, term} | {:error, :not_found}
+  def first(table) do
+    case Mnesia.first(table) do
+      :"$end_of_table" -> {:error, :not_found}
+      key -> {:ok, key}
     end
   end
 
-  def delete_table_copy(node) do
-    Mnesia.del_table_copy(cache_table(), node)
-  end
+  @doc """
+  Retrieves the next key in the specified Mnesia table after the given key.
 
-  def bulk_read(keys) when is_list(keys) do
-    fn -> for key <- keys, do: Mnesia.read(cache_table(), key) end
-    |> Mnesia.transaction()
-    |> case do
-      {:atomic, []} ->
-        []
+  ## Parameters
 
-      {:atomic, results} ->
-        results
-        |> Enum.filter(&(&1 != []))
-        |> Enum.map(fn [record] -> record end)
+    - `table`: The name of the Mnesia table (atom).
+    - `key`: The current key (term).
 
-      _other ->
-        []
+  ## Returns
+
+    - `{:ok, next_key}`: If the next key is found.
+    - `{:error, :not_found}`: If there is no next key (end of table).
+
+  ## Examples
+
+      iex> Nebulex.Adapters.Mnesia.Table.next(:table, :current_key)
+      {:ok, :next_key}
+
+      iex> Nebulex.Adapters.Mnesia.Table.next(:table, :last_key)
+      {:error, :not_found}
+
+  """
+  @spec next(atom, term) :: {:ok, term} | {:error, :not_found}
+  def next(table, key) do
+    case Mnesia.next(table, key) do
+      :"$end_of_table" -> {:error, :not_found}
+      next_key -> {:ok, next_key}
     end
   end
 
-  def read(key) do
-    fn -> Mnesia.read(cache_table(), key) end
-    |> Mnesia.transaction()
-    |> case do
-      {:atomic, []} ->
-        nil
+  @doc """
+  Writes a key-value pair to the specified Mnesia table.
 
-      {:atomic, [response]} ->
-        response
+  ## Parameters
 
-      error ->
-        {:error, error}
+    - `table`: The name of the Mnesia table (atom).
+    - `key`: The key to write (term).
+    - `value`: The value to write (term).
+    - `touched`: The timestamp when the entry was last touched (integer).
+    - `ttl`: The time-to-live for the entry (term or integer).
+
+  ## Returns
+
+    - `:ok`: If the write operation is successful.
+
+  ## Examples
+
+      iex> Nebulex.Adapters.Mnesia.Table.write(:table, :key, "value", 1759420681791, :infinity)
+      :ok
+
+  """
+  @spec write(atom, term, term, integer, term | integer) :: :ok
+  def write(table, key, value, touched, ttl) do
+    Mnesia.write({table, key, value, touched, ttl})
+  end
+
+  @doc """
+  Deletes an entry from the specified Mnesia table by key.
+
+  ## Parameters
+
+    - `table`: The name of the Mnesia table (atom).
+    - `key`: The key to delete (term).
+
+  ## Returns
+
+    - `:ok`: If the delete operation is successful.
+
+  ## Examples
+
+      iex> Nebulex.Adapters.Mnesia.Table.delete(:table, :key)
+      :ok
+
+  """
+  @spec delete(atom, term) :: :ok
+  def delete(table, key) do
+    Mnesia.delete({table, key})
+  end
+
+  @doc """
+  Selects entries from the specified Mnesia table based on given options.
+
+  ## Parameters
+
+    - `table`: The name of the Mnesia table (atom).
+    - `opts`: A keyword list of options.
+      - `:guards` - A list of guard conditions (default: `[]`).
+      - `:return` - A list specifying which attributes to return (default: `[:"$1"]`).
+
+  ## Returns
+
+    - A list of selected entries.
+
+  ## Examples
+
+      iex> guards = [:"$2" > 10]
+      iex> return = [:"$1", :"$2"]
+      iex> Nebulex.Adapters.Mnesia.Table.select(:table, guards: guards, return: return)
+      [{:key1, 15}, {:key2, 20}]
+
+      iex> Nebulex.Adapters.Mnesia.Table.select(:table)
+      [:key1, :key2, :key3]
+
+  """
+  @spec select(atom, keyword) :: [term]
+  def select(table, opts \\ []) do
+    guards = Keyword.get(opts, :guards, [])
+    return = Keyword.get(opts, :return, [:"$1"])
+    attrs = {table, :"$1", :"$2", :"$3", :"$4"}
+    Mnesia.select(table, [{attrs, guards, return}])
+  end
+
+  @doc """
+  Streams entries from the specified Mnesia table based on given options.
+
+  ## Parameters
+
+    - `table`: The name of the Mnesia table (atom).
+    - `opts`: A keyword list of options (same as in `select/2`).
+
+  ## Returns
+
+    - A stream of selected entries.
+
+  ## Examples
+
+      iex> opts = [return: :key]
+      iex> Nebulex.Adapters.Mnesia.Table.stream(:table, opts) |> Enum.to_list()
+      [:key1, :key2, :key3]
+
+      iex> opts = [return: :value]
+      iex> Nebulex.Adapters.Mnesia.Table.stream(:table, opts) |> Enum.to_list()
+      [value1, value2, value3]
+
+      iex> opts = [return: {:key, :value}]
+      iex> Nebulex.Adapters.Mnesia.Table.stream(:table, opts) |> Enum.to_list()
+      [{:key1, value1}, {:key2, value2}, {:key3, value3}]
+
+  """
+  @spec stream(atom, keyword) :: Enumerable.t()
+  def stream(table, opts), do: Stream.select(table, opts)
+
+  @doc """
+  Wraps a function in a Mnesia transaction.
+
+  ## Parameters
+
+    - `fun`: The function to execute within the transaction (arity 0).
+
+  ## Returns
+
+    - The result of the function if the transaction is successful.
+    - `{:error, reason}` if the transaction is aborted.
+
+  ## Examples
+
+      iex> Nebulex.Adapters.Mnesia.Table.transaction(fn -> :ok end)
+      :ok
+
+      iex> Nebulex.Adapters.Mnesia.Table.transaction(fn -> Mnesia.abort(:some_reason) end)
+      {:error, :some_reason}
+
+  """
+  @spec transaction((-> any)) :: any | {:error, term}
+  def transaction(fun) do
+    case Mnesia.transaction(fun) do
+      {:atomic, result} -> result
+      {:aborted, reason} -> {:error, reason}
     end
-  end
-
-  def bulk_write(values) when is_list(values) do
-    fn ->
-      Enum.map(values, &Tuple.insert_at(&1, 0, cache_table()))
-      |> Enum.map(&Mnesia.write/1)
-    end
-    |> Mnesia.transaction()
-    |> case do
-      {:atomic, response} -> response
-      error -> {:error, error}
-    end
-  end
-
-  def write(value) do
-    tab_key = Tuple.insert_at(value, 0, cache_table())
-
-    fn -> Mnesia.write(tab_key) end
-    |> Mnesia.transaction()
-    |> case do
-      {:atomic, :ok} -> :ok
-      other -> other
-    end
-  end
-
-  def delete(key) do
-    fn -> Mnesia.delete({cache_table(), key}) end
-    |> Mnesia.transaction()
-    |> case do
-      {:atomic, :ok} ->
-        :ok
-
-      {_, error} ->
-        {:error, error}
-    end
-  end
-
-  def all_records do
-    fn -> Mnesia.match_object({cache_table(), :_, :_, :_, :_}) end
-    |> Mnesia.transaction()
-    |> case do
-      {:atomic, records} ->
-        records
-
-      _error ->
-        {:error, :unexpected}
-    end
-  end
-
-  def clear! do
-    all_keys()
-    |> tap(fn _ -> Mnesia.clear_table(cache_table()) end)
-  end
-
-  def all_keys do
-    fn -> Mnesia.all_keys(MnesiaCache) end
-    |> Mnesia.transaction()
-    |> case do
-      {:atomic, keys} -> keys
-      _other -> {:error, :unexpected_deleted}
-    end
-  end
-
-  def first do
-    fn -> Mnesia.first(cache_table()) end
-    |> Mnesia.transaction()
-  end
-
-  def next(key) do
-    fn -> Mnesia.next(cache_table(), key) end
-    |> Mnesia.transaction()
-  end
-
-  defp cache_table do
-    @default_table
-  end
-
-  def expired_records do
-    today =
-      DateTime.utc_now()
-      |> DateTime.to_unix(:millisecond)
-
-    ms = [
-      {
-        {cache_table(), :"$1", :"$2", :"$3", :"$4"},
-        [
-          {:<, {:+, :"$3", :"$4"}, today}
-        ],
-        [{{:"$1", :"$2", :"$3", :"$4"}}]
-      }
-    ]
-
-    :mnesia.transaction(fn ->
-      :mnesia.select(cache_table(), ms)
-    end)
   end
 end

@@ -1,4 +1,6 @@
 defmodule NebulexMnesiaAdapter.TestCache do
+  @moduledoc false
+
   use Nebulex.Cache,
     otp_app: :nebulex_mnesia_adapter,
     adapter: Nebulex.Adapters.Mnesia
