@@ -7,6 +7,8 @@ defmodule Nebulex.Adapters.Mnesia.Cluster do
 
   use GenServer
 
+  alias :mnesia, as: Mnesia
+
   @table_attrs ~w[key value touched ttl]a
 
   def start_link(opts) do
@@ -14,7 +16,7 @@ defmodule Nebulex.Adapters.Mnesia.Cluster do
   end
 
   def init(opts) do
-    :mnesia.start()
+    Mnesia.start()
     :net_kernel.monitor_nodes(true)
     cache = Keyword.fetch!(opts, :cache)
     table = Keyword.get(opts, :table, cache)
@@ -33,21 +35,21 @@ defmodule Nebulex.Adapters.Mnesia.Cluster do
   end
 
   defp create_schema_and_table(table) do
-    :mnesia.stop()
-    :mnesia.create_schema([node()])
-    :mnesia.start()
+    Mnesia.stop()
+    Mnesia.create_schema([Node.self()])
+    Mnesia.start()
     create_table(table)
   end
 
   defp create_table(table) do
-    :mnesia.create_table(table,
+    Mnesia.create_table(table,
       attributes: @table_attrs,
-      disc_copies: [node()]
+      disc_copies: [Node.self()]
     )
   end
 
   defp add_table_copy(table) do
-    :mnesia.change_config(:extra_db_nodes, Node.list())
-    :mnesia.add_table_copy(table, node(), :disc_copies)
+    Mnesia.change_config(:extra_db_nodes, Node.list())
+    Mnesia.add_table_copy(table, Node.self(), :disc_copies)
   end
 end

@@ -4,6 +4,7 @@ defmodule Nebulex.Adapters.Mnesia.Table do
   """
 
   alias __MODULE__.Stream
+  alias :mnesia, as: Mnesia
 
   @doc """
   Reads an entry from the specified Mnesia table by key.
@@ -29,7 +30,7 @@ defmodule Nebulex.Adapters.Mnesia.Table do
   """
   @spec read(atom, term) :: {:ok, tuple} | {:error, :not_found}
   def read(table, key) do
-    case :mnesia.read({table, key}) do
+    case Mnesia.read({table, key}) do
       [entry] -> {:ok, entry}
       [] -> {:error, :not_found}
     end
@@ -58,7 +59,7 @@ defmodule Nebulex.Adapters.Mnesia.Table do
   """
   @spec first(atom) :: {:ok, term} | {:error, :not_found}
   def first(table) do
-    case :mnesia.first(table) do
+    case Mnesia.first(table) do
       :"$end_of_table" -> {:error, :not_found}
       key -> {:ok, key}
     end
@@ -88,7 +89,7 @@ defmodule Nebulex.Adapters.Mnesia.Table do
   """
   @spec next(atom, term) :: {:ok, term} | {:error, :not_found}
   def next(table, key) do
-    case :mnesia.next(table, key) do
+    case Mnesia.next(table, key) do
       :"$end_of_table" -> {:error, :not_found}
       next_key -> {:ok, next_key}
     end
@@ -117,7 +118,7 @@ defmodule Nebulex.Adapters.Mnesia.Table do
   """
   @spec write(atom, term, term, integer, term | integer) :: :ok
   def write(table, key, value, touched, ttl) do
-    :mnesia.write({table, key, value, touched, ttl})
+    Mnesia.write({table, key, value, touched, ttl})
   end
 
   @doc """
@@ -140,7 +141,7 @@ defmodule Nebulex.Adapters.Mnesia.Table do
   """
   @spec delete(atom, term) :: :ok
   def delete(table, key) do
-    :mnesia.delete({table, key})
+    Mnesia.delete({table, key})
   end
 
   @doc """
@@ -173,7 +174,7 @@ defmodule Nebulex.Adapters.Mnesia.Table do
     guards = Keyword.get(opts, :guards, [])
     return = Keyword.get(opts, :return, [:"$1"])
     attrs = {table, :"$1", :"$2", :"$3", :"$4"}
-    :mnesia.select(table, [{attrs, guards, return}])
+    Mnesia.select(table, [{attrs, guards, return}])
   end
 
   @doc """
@@ -223,13 +224,13 @@ defmodule Nebulex.Adapters.Mnesia.Table do
       iex> Nebulex.Adapters.Mnesia.Table.transaction(fn -> :ok end)
       :ok
 
-      iex> Nebulex.Adapters.Mnesia.Table.transaction(fn -> :mnesia.abort(:some_reason) end)
+      iex> Nebulex.Adapters.Mnesia.Table.transaction(fn -> Mnesia.abort(:some_reason) end)
       {:error, :some_reason}
 
   """
   @spec transaction((-> any)) :: any | {:error, term}
   def transaction(fun) do
-    case :mnesia.transaction(fun) do
+    case Mnesia.transaction(fun) do
       {:atomic, result} -> result
       {:aborted, reason} -> {:error, reason}
     end

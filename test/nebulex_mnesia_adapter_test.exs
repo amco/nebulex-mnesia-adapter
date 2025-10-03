@@ -2,6 +2,7 @@ defmodule NebulexMnesiaAdapterTest do
   use ExUnit.Case
   use NebulexMnesiaAdapter.CacheTest
 
+  alias :mnesia, as: Mnesia
   alias NebulexMnesiaAdapter.TestCache, as: Cache
 
   setup do
@@ -11,7 +12,7 @@ defmodule NebulexMnesiaAdapterTest do
         {:error, {:already_started, pid}} -> pid
       end
 
-    :mnesia.wait_for_tables([Cache], 5_000)
+    Mnesia.wait_for_tables([Cache], 5_000)
     Cache.delete_all()
 
     on_exit(fn -> safe_stop(pid) end)
