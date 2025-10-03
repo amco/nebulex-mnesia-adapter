@@ -3,7 +3,7 @@ defmodule NebulexMnesiaAdapter.MixProject do
 
   @source_url "https://github.com/amco/nebulex-mnesia-adapter"
   @nbx_vsn "2.6.5"
-  @version "0.1.0"
+  @version "2.6.5"
 
   def project do
     [
