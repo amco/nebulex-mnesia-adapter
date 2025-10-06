@@ -6,7 +6,7 @@ defmodule Nebulex.Adapters.Mnesia.Expiration do
   ## Example
 
       config :my_app, MyApp.MnesiaCache,
-        cleanup_interval: 1_000 * 60 * 60 * 2
+        cleanup_interval: :timer.hours(2)
 
   """
 
@@ -15,7 +15,7 @@ defmodule Nebulex.Adapters.Mnesia.Expiration do
   alias Nebulex.Adapters.Mnesia.Utils
 
   @doc "Default cleanup interval in milliseconds of 6 hours."
-  @default_interval 1_000 * 60 * 60 * 6
+  @default_interval :timer.hours(6)
 
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts)
