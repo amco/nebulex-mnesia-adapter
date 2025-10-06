@@ -10,7 +10,7 @@ defmodule Nebulex.Adapters.Mnesia do
     * `:table` - The name of the Mnesia table to use..
 
     * `:cleanup_interval` - The interval in milliseconds for cleaning up expired
-      entries. Defaults to `1_000 * 60 * 60 * 6` (6 hours).
+      entries. Defaults to `:timer.hours(6)`.
 
   ## Example
 
@@ -22,7 +22,7 @@ defmodule Nebulex.Adapters.Mnesia do
 
       config :my_app, MyApp.MnesiaCache,
         table: :my_cache_table,
-        cleanup_interval: 1_000 * 60 * 60 * 6
+        cleanup_interval: :timer.hours(6)
 
   """
 
